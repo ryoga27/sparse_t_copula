@@ -11,6 +11,8 @@ library(spcov)
 
 # calculate mahalanobis distance
 delta = function(x, mu, Sigma){
+    n = nrow(x)
+    d = ncol(x)
     d_vec = rep(NA, length = n)
     for(i in 1:n){
         d_vec[i] = t(x[i, ] - mu)%*%solve(Sigma)%*%(x[i, ] - mu)
@@ -51,20 +53,20 @@ calc_S_tau = function(x, tau, mu){
     return(S_tau)
 }
 
-# calculate likelihood functiond
-log_lilelihood = function(x, mu, Sigma, nu, lambda){
+# calculate loss functiond
+loss = function(x, mu, Sigma, nu, lambda){
     log_likelihood = 0
     for(i in 1:n){
         log_likelihood = log_likelihood + log(dmvt(x[1, ], delta = mu, sigma = Sigma, log = FALSE))
     }
-    penalty = lambda*(sum(solve(Sigma)) - sum(diag(solve(Sigma))))
-    loss = log_likelihood + penalty
+    penalty = lambda*abs(sum(solve(Sigma)) - sum(diag(solve(Sigma))))
+    loss = log_likelihood - penalty
     return(loss)
 }
 
-sparse_t_copula = function(
+sparse_t = function(
     x, nu, lambda = 0.1,
-    iter_max = 100, epsilon = 1e-3
+    iter_max = 100, epsilon = 1e-3, step.size = 1
 ){
     n = nrow(x)
     d = ncol(x)
@@ -73,23 +75,23 @@ sparse_t_copula = function(
     Sigma_array = array(NA, dim = c(d, d, iter_max + 1))
     tau_array = array(NA, dim = c(n, iter_max))
     S_tau_array = array(NA, dim = c(d, d, iter_max))
-    l_vec = rep(NA, length = iter_max + 1)
+    loss_vec = rep(NA, length = iter_max + 1)
 
     # set intial values
     mu_0 = mean_col(x)
     mu_array[, 1] = mu_0
     S_0 = cov(x)
     Sigma_array[, , 1] = solve(S_0)
-    l_vec[1] = 0
+    loss_vec[1] = 0
 
     for(s in 1:iter_max){
         tau_array[, s] = calc_tau(x = x, nu = nu, mu = mu_array[, s], Sigma = Sigma_array[, , s])
         mu_array[, s + 1] = calc_mu(x = x, tau = tau_array[, s])
         S_tau_array[, , s] = calc_S_tau(x = x, tau = tau_array[, s], mu = mu_array[, s + 1])
-        fit = spcov(Sigma = diag(d), S = S_tau_array[, , s], lambda = lambda, step.size = 0.1)
+        fit = spcov(Sigma = diag(d), S = S_tau_array[, , s], lambda = lambda, step.size = step.size)
         Sigma_array[, , s + 1] = fit$Sigma
-        l_vec[s + 1] = log_lilelihood(x, mu = mu_array[, s + 1], Sigma = Sigma_array[, , s + 1], nu = nu, lambda = lambda)
-        convergence = (abs(l_vec[s + 1] - l_vec[s]) < epsilon)
+        loss_vec[s + 1] = loss(x, mu = mu_array[, s + 1], Sigma = Sigma_array[, , s + 1], nu = nu, lambda = lambda)
+        convergence = (abs(loss_vec[s + 1] - loss_vec[s]) < epsilon)
         if(convergence){
             iter_num = s
             message("converged")
@@ -103,35 +105,35 @@ sparse_t_copula = function(
         mu = mu_array[, iter_num + 1],
         Sigma = Sigma_array[, , iter_num + 1],
         nu = nu,
-        log_likelihood = l_vec[iter_num + 1],
+        loss = loss_vec[iter_num + 1],
         iter_num = iter_num
     )
     return(args_list)
 }
 
-# select nu (defree of freedom)
-select_nu = function(x, nu, lambda){
-
-    N = length(nu)
-
-    fit = list()
-    log_likelihood_vec = rep(NA, length = N)
-
-    for(i in 1:N){
-        cat("searching nu:", nu_vec[i], "\n")
-        fit[[i]] = sparse_t_copula(x = x, nu = nu_vec[i], lambda = lambda)
-        log_likelihood_vec[i] = fit[[i]]$log_likelihood
-    }
-
-    opt_index = (1:N)[log_likelihood_vec == max(log_likelihood_vec)]
-
-    args_list = list(
-        mu = fit[[opt_index]]$mu,
-        Sigma = fit[[opt_index]]$Sigma,
-        nu = nu[opt_index],
-        lambda = lambda,
-        log_likelihood = log_likelihood_vec
-    )
-
-    return(args_list)
-}
+# # select nu (defree of freedom)
+# select_nu = function(x, nu_vec, lambda){
+#
+#     N = length(nu_vec)
+#
+#     fit = list()
+#     loss_vec = rep(NA, length = N)
+#
+#     for(i in 1:N){
+#         cat("searching nu:", nu_vec[i], "\n")
+#         fit[[i]] = sparse_t(x = x, nu = nu_vec[i], lambda = lambda)
+#         loss_vec[i] = fit[[i]]$loss
+#     }
+#
+#     opt_index = (1:N)[loss_vec == max(loss_vec)]
+#
+#     args_list = list(
+#         mu = fit[[opt_index]]$mu,
+#         Sigma = fit[[opt_index]]$Sigma,
+#         nu = nu_vec[opt_index],
+#         lambda = lambda,
+#         loss = loss_vec
+#     )
+#
+#     return(args_list)
+# }
