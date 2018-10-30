@@ -129,7 +129,7 @@ select_nu = function(x, nu, lambda){
         mu = fit[[opt_index]]$mu,
         Sigma = fit[[opt_index]]$Sigma,
         nu = nu[opt_index],
-        lambda = lamdba,
+        lambda = lambda,
         log_likelihood = log_likelihood_vec
     )
 

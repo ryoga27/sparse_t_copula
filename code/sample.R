@@ -27,4 +27,4 @@ for(j in 1:d){
 }
 
 nu_vec = seq(from = 0, to = 10, by = 1)
-select_nu(x = u[, 1:10], nu = nu_vec, lambda = 0.1)
+fit = select_nu(x = u[, 1:100], nu = nu_vec, lambda = 0.1)
